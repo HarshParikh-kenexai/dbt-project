@@ -1,0 +1,26 @@
+# ============================================================================
+# profiles.yml (example — do NOT commit to git, keep in ~/.dbt/)
+# ============================================================================
+snowflake_finance:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: FINANCE_ROLE
+      warehouse: FINANCE_WH
+      database: FINANCE_DB
+      schema: finance_mart
+      threads: 4
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: SVC_DBT_FINANCE
+      password: "{{ env_var('DBT_PROD_PASSWORD') }}"
+      role: FINANCE_ROLE
+      warehouse: FINANCE_WH
+      database: FINANCE_DB
+      schema: finance_mart
+      threads: 8

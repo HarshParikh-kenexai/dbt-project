@@ -1,0 +1,60 @@
+name: 'finance_semantic_layer'
+version: '1.0.0'
+config-version: 2
+profile: 'snowflake_finance'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  finance_semantic_layer:
+
+    staging:
+      +materialized: view
+      +tags: ['staging']
+      erp:
+        +schema: staging
+      billing:
+        +schema: staging
+      planning:
+        +schema: staging
+      treasury:
+        +schema: staging
+
+    marts:
+      +materialized: table
+      +tags: ['mart']
+      finance:
+        +schema: finance_mart
+        +snowflake_warehouse: FINANCE_WH
+        +transient: false
+        +copy_grants: true
+        +query_tag: 'dbt_finance'
+
+    semantic:
+      +schema: semantic_layer
+      +tags: ['semantic_view']
+
+seeds:
+  finance_semantic_layer:
+    +schema: seeds
+    +quote_columns: false
+
+snapshots:
+  finance_semantic_layer:
+    +target_schema: finance_snapshots
+    +strategy: timestamp
+    +updated_at: updated_at
+
+vars:
+  fiscal_year_start_month: 4
+  reporting_currency: 'USD'
+  time_spine_start: '2020-01-01'
+  time_spine_end: '2030-12-31'
+  incremental_lookback_days: 3
