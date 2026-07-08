@@ -4,4 +4,3 @@ logs/
 profiles.yml
 .env
 *.pyc
-dbt_internal_packages/

@@ -1,0 +1,12 @@
+account_range_start,account_range_end,category,financial_statement
+4000,4999,Revenue,Income Statement
+5000,5999,COGS,Income Statement
+6000,8999,Operating Expense,Income Statement
+9000,9099,Other Income,Income Statement
+9100,9499,Other Expense,Income Statement
+9500,9599,Tax,Income Statement
+1000,1499,Current Assets,Balance Sheet
+1500,1699,Non-Current Assets,Balance Sheet
+2000,2499,Current Liabilities,Balance Sheet
+2500,2999,Non-Current Liabilities,Balance Sheet
+3000,3999,Equity,Balance Sheet

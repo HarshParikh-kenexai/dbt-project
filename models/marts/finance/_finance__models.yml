@@ -1,0 +1,57 @@
+version: 2
+
+models:
+  - name: fct_journal_entries
+    description: "GL journal entries at transaction grain"
+    columns:
+      - name: journal_entry_id
+        tests: [unique, not_null]
+      - name: posting_date
+        tests: [not_null]
+      - name: account_id
+        tests: [not_null, {relationships: {to: ref('dim_chart_of_accounts'), field: account_id}}]
+
+  - name: fct_invoices
+    description: "Customer invoices — revenue recognition source"
+    columns:
+      - name: invoice_id
+        tests: [unique, not_null]
+      - name: invoice_date
+        tests: [not_null]
+
+  - name: fct_budget
+    description: "Budget and rolling forecast"
+    columns:
+      - name: budget_line_id
+        tests: [unique, not_null]
+
+  - name: dim_chart_of_accounts
+    description: "GL account hierarchy"
+    columns:
+      - name: account_id
+        tests: [unique, not_null]
+
+  - name: dim_cost_center
+    description: "Cost center / department hierarchy"
+    columns:
+      - name: cost_center_id
+        tests: [unique, not_null]
+
+  - name: dim_legal_entity
+    description: "Legal entities for consolidation"
+    columns:
+      - name: entity_id
+        tests: [unique, not_null]
+
+  - name: dim_fiscal_calendar
+    description: "Fiscal calendar with custom April FY start"
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+
+  - name: metricflow_time_spine
+    description: "Contiguous date spine for MetricFlow cumulative metrics"
+    time_spine:
+      standard_granularity_column:
+        column: ds
+        grain: day
