@@ -37,10 +37,6 @@ models:
         +copy_grants: true
         +query_tag: 'dbt_finance'
 
-    semantic:
-      +schema: semantic_layer
-      +tags: ['semantic_view']
-
 seeds:
   finance_semantic_layer:
     +schema: seeds
