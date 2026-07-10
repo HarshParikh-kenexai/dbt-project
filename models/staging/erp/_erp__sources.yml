@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: erp
+    description: "ERP system extracts (SAP/Oracle)"
+    database: FINANCE_DB
+    schema: raw
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
+    loaded_at_field: created_at
+    tables:
+      - name: raw_gl_journal_entries
+        description: "GL journal entries — daily extract"
+        columns:
+          - name: journal_number
+            tests: [not_null]
+          - name: posting_date
+            tests: [not_null]
+      - name: raw_chart_of_accounts
+        description: "Chart of accounts master data"
+      - name: raw_cost_centers
+        description: "Cost center / department hierarchy"
+      - name: raw_legal_entities
+        description: "Legal entity / company codes"

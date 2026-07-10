@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: treasury
+    description: "Treasury / FX rates"
+    database: FINANCE_DB
+    schema: raw
+    tables:
+      - name: raw_fx_rates
+        description: "Daily FX rates"

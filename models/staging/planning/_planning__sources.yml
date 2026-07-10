@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: planning
+    description: "Budget and forecasting tool"
+    database: FINANCE_DB
+    schema: raw
+    tables:
+      - name: raw_budget
+        description: "Annual budget and rolling forecast"

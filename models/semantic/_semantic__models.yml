@@ -1,0 +1,659 @@
+# ============================================================================
+# FINANCE dbt SEMANTIC LAYER → POWER BI
+# ============================================================================
+# This YAML is designed specifically for Power BI consumption.
+#
+# HOW IT WORKS IN POWER BI:
+#   - "ALL" table in PBI Navigator = every metric + dimension
+#   - Each saved_query below = a named table in PBI Navigator
+#   - Power BI users select a saved_query → get a focused dataset
+#   - DirectQuery mode only (Import not supported)
+#
+# DEPLOY:
+#   1. Push this to your dbt project under models/semantic/
+#   2. dbt build in production environment
+#   3. Connect Power BI using the dbt Semantic Layer connector
+# ============================================================================
+
+version: 2
+
+
+# ============================================================================
+# SEMANTIC MODELS
+# ============================================================================
+
+semantic_models:
+
+  # ---------- GL JOURNAL ENTRIES (core financial fact) ----------
+  - name: journal_entries
+    description: >
+      GL journal entries at transaction grain. Core fact driving P&L,
+      balance sheet, and variance reporting. Each row is a single
+      debit or credit posting to a GL account.
+    model: ref('fct_journal_entries')
+    defaults:
+      agg_time_dimension: posting_date
+
+    entities:
+      - name: journal_entry
+        type: primary
+        expr: journal_entry_id
+      - name: account
+        type: foreign
+        expr: account_id
+      - name: cost_center
+        type: foreign
+        expr: cost_center_id
+      - name: legal_entity
+        type: foreign
+        expr: entity_id
+
+    measures:
+      - name: reporting_amount_total
+        agg: sum
+        expr: reporting_amount
+        description: "Net GL amount in reporting currency (USD)"
+
+      - name: cogs_amount
+        agg: sum
+        expr: "CASE WHEN account_category = 'COGS' THEN reporting_amount ELSE 0 END"
+        description: "Cost of Goods Sold"
+
+      - name: opex_amount
+        agg: sum
+        expr: "CASE WHEN account_category = 'OPERATING EXPENSE' THEN reporting_amount ELSE 0 END"
+        description: "Operating expenses"
+
+      - name: da_amount
+        agg: sum
+        expr: >
+          CASE WHEN account_name ILIKE '%depreciation%'
+                 OR account_name ILIKE '%amortization%'
+               THEN reporting_amount ELSE 0 END
+        description: "Depreciation & Amortization"
+
+      - name: net_income_amount
+        agg: sum
+        expr: "CASE WHEN financial_statement_line = 'Income Statement' THEN reporting_amount ELSE 0 END"
+        description: "All P&L postings"
+
+      - name: current_assets_amount
+        agg: sum
+        expr: "CASE WHEN account_category = 'CURRENT ASSETS' THEN net_amount ELSE 0 END"
+
+      - name: current_liabilities_amount
+        agg: sum
+        expr: "CASE WHEN account_category = 'CURRENT LIABILITIES' THEN net_amount ELSE 0 END"
+
+      - name: ar_amount
+        agg: sum
+        expr: "CASE WHEN account_number LIKE '1200%' THEN net_amount ELSE 0 END"
+        description: "Accounts receivable"
+
+      - name: entry_count
+        agg: count_distinct
+        expr: journal_entry_id
+
+    dimensions:
+      - name: posting_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: posting_date
+
+      - name: account_category
+        type: categorical
+        expr: account_category
+
+      - name: account_name
+        type: categorical
+        expr: account_name
+
+      - name: account_number
+        type: categorical
+        expr: account_number
+
+      - name: financial_statement_line
+        type: categorical
+        expr: financial_statement_line
+
+      - name: cost_center_name
+        type: categorical
+        expr: cost_center_name
+
+      - name: department
+        type: categorical
+        expr: department
+
+      - name: division
+        type: categorical
+        expr: division
+
+      - name: business_unit
+        type: categorical
+        expr: business_unit
+
+      - name: entity_name
+        type: categorical
+        expr: entity_name
+
+      - name: entity_country
+        type: categorical
+        expr: entity_country
+
+      - name: fiscal_year
+        type: categorical
+        expr: fiscal_year
+
+      - name: fiscal_quarter
+        type: categorical
+        expr: fiscal_quarter
+
+      - name: fiscal_period_name
+        type: categorical
+        expr: fiscal_period_name
+
+      - name: journal_type
+        type: categorical
+        expr: journal_type
+
+      - name: source_system
+        type: categorical
+        expr: source_system
+
+
+  # ---------- INVOICES (revenue sub-ledger) ----------
+  - name: invoices
+    description: >
+      Customer invoices at line-item grain. Revenue recognition
+      source of truth per ASC 606.
+    model: ref('fct_invoices')
+    defaults:
+      agg_time_dimension: invoice_date
+
+    entities:
+      - name: invoice
+        type: primary
+        expr: invoice_id
+      - name: legal_entity
+        type: foreign
+        expr: entity_id
+
+    measures:
+      - name: gross_invoice_total
+        agg: sum
+        expr: invoice_amount
+        description: "Gross invoiced before discounts/returns"
+
+      - name: discount_total
+        agg: sum
+        expr: discount_amount
+
+      - name: return_total
+        agg: sum
+        expr: return_amount
+
+      - name: net_revenue_amount
+        agg: sum
+        expr: net_amount_usd
+        description: "Net revenue in USD after discounts and returns"
+
+      - name: invoice_count
+        agg: count_distinct
+        expr: invoice_id
+
+      - name: customer_count
+        agg: count_distinct
+        expr: customer_id
+
+    dimensions:
+      - name: invoice_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: invoice_date
+
+      - name: revenue_type
+        type: categorical
+        expr: revenue_type
+
+      - name: customer_name
+        type: categorical
+        expr: customer_name
+
+      - name: entity_name
+        type: categorical
+        expr: entity_name
+
+      - name: fiscal_year
+        type: categorical
+        expr: fiscal_year
+
+      - name: fiscal_quarter
+        type: categorical
+        expr: fiscal_quarter
+
+      - name: fiscal_period_name
+        type: categorical
+        expr: fiscal_period_name
+
+      - name: currency_code
+        type: categorical
+        expr: currency_code
+
+
+  # ---------- BUDGET & FORECAST ----------
+  - name: budget
+    description: >
+      Approved budget and rolling forecast by GL account,
+      cost center, and fiscal period.
+    model: ref('fct_budget')
+    defaults:
+      agg_time_dimension: budget_date
+
+    entities:
+      - name: budget_line
+        type: primary
+        expr: budget_line_id
+      - name: account
+        type: foreign
+        expr: account_id
+      - name: cost_center
+        type: foreign
+        expr: cost_center_id
+
+    measures:
+      - name: budget_amount_total
+        agg: sum
+        expr: budget_amount
+
+      - name: forecast_amount_total
+        agg: sum
+        expr: forecast_amount
+
+    dimensions:
+      - name: budget_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: budget_date
+
+      - name: budget_version
+        type: categorical
+        expr: budget_version
+
+      - name: account_category
+        type: categorical
+        expr: account_category
+
+      - name: account_name
+        type: categorical
+        expr: account_name
+
+      - name: cost_center_name
+        type: categorical
+        expr: cost_center_name
+
+      - name: division
+        type: categorical
+        expr: division
+
+      - name: fiscal_year
+        type: categorical
+        expr: fiscal_year
+
+      - name: fiscal_quarter
+        type: categorical
+        expr: fiscal_quarter
+
+      - name: fiscal_period_name
+        type: categorical
+        expr: fiscal_period_name
+
+
+# ============================================================================
+# METRICS (these appear as fields in Power BI)
+# ============================================================================
+
+metrics:
+
+  # ---- Revenue ----
+  - name: gross_revenue
+    type: simple
+    label: "Gross Revenue"
+    description: "Total invoiced before discounts/returns"
+    type_params:
+      measure: gross_invoice_total
+
+  - name: net_revenue
+    type: simple
+    label: "Net Revenue"
+    description: "GAAP net revenue in USD"
+    type_params:
+      measure: net_revenue_amount
+
+  - name: total_discounts
+    type: simple
+    label: "Discounts"
+    type_params:
+      measure: discount_total
+
+  - name: total_returns
+    type: simple
+    label: "Returns"
+    type_params:
+      measure: return_total
+
+  - name: invoice_count
+    type: simple
+    label: "Invoice Count"
+    type_params:
+      measure: invoice_count
+
+  - name: active_customers
+    type: simple
+    label: "Active Customers"
+    type_params:
+      measure: customer_count
+
+  # ---- P&L ----
+  - name: cogs
+    type: simple
+    label: "COGS"
+    description: "Cost of Goods Sold"
+    type_params:
+      measure: cogs_amount
+
+  - name: gross_profit
+    type: derived
+    label: "Gross Profit"
+    type_params:
+      expr: rev - cogs
+      metrics:
+        - name: net_revenue
+          alias: rev
+        - name: cogs
+
+  - name: gross_margin_pct
+    type: derived
+    label: "Gross Margin %"
+    description: "Target above 60%"
+    type_params:
+      expr: "(rev - cogs) * 100.0 / NULLIF(rev, 0)"
+      metrics:
+        - name: net_revenue
+          alias: rev
+        - name: cogs
+
+  - name: operating_expenses
+    type: simple
+    label: "Operating Expenses"
+    type_params:
+      measure: opex_amount
+
+  - name: operating_income
+    type: derived
+    label: "Operating Income (EBIT)"
+    type_params:
+      expr: rev - cogs - opex
+      metrics:
+        - name: net_revenue
+          alias: rev
+        - name: cogs
+        - name: operating_expenses
+          alias: opex
+
+  - name: depreciation_amortization
+    type: simple
+    label: "D&A"
+    type_params:
+      measure: da_amount
+
+  - name: ebitda
+    type: derived
+    label: "EBITDA"
+    type_params:
+      expr: rev - cogs - opex + da
+      metrics:
+        - name: net_revenue
+          alias: rev
+        - name: cogs
+        - name: operating_expenses
+          alias: opex
+        - name: depreciation_amortization
+          alias: da
+
+  - name: net_income
+    type: simple
+    label: "Net Income"
+    type_params:
+      measure: net_income_amount
+
+  # ---- Variance ----
+  - name: actual_gl
+    type: simple
+    label: "Actual (GL)"
+    type_params:
+      measure: reporting_amount_total
+
+  - name: budget_total
+    type: simple
+    label: "Budget"
+    type_params:
+      measure: budget_amount_total
+
+  - name: forecast_total
+    type: simple
+    label: "Forecast"
+    type_params:
+      measure: forecast_amount_total
+
+  - name: budget_variance
+    type: derived
+    label: "Budget Variance"
+    type_params:
+      expr: actual - budget
+      metrics:
+        - name: actual_gl
+          alias: actual
+        - name: budget_total
+          alias: budget
+
+  - name: budget_variance_pct
+    type: derived
+    label: "Budget Variance %"
+    type_params:
+      expr: "(actual - budget) * 100.0 / NULLIF(budget, 0)"
+      metrics:
+        - name: actual_gl
+          alias: actual
+        - name: budget_total
+          alias: budget
+
+  # ---- Balance Sheet ----
+  - name: current_assets
+    type: simple
+    label: "Current Assets"
+    type_params:
+      measure: current_assets_amount
+
+  - name: current_liabilities
+    type: simple
+    label: "Current Liabilities"
+    type_params:
+      measure: current_liabilities_amount
+
+  - name: working_capital
+    type: derived
+    label: "Working Capital"
+    type_params:
+      expr: ca - cl
+      metrics:
+        - name: current_assets
+          alias: ca
+        - name: current_liabilities
+          alias: cl
+
+  - name: accounts_receivable
+    type: simple
+    label: "Accounts Receivable"
+    type_params:
+      measure: ar_amount
+
+  - name: dso
+    type: derived
+    label: "DSO"
+    description: "Days Sales Outstanding — target < 45"
+    type_params:
+      expr: "ar * 365.0 / NULLIF(rev, 0)"
+      metrics:
+        - name: accounts_receivable
+          alias: ar
+        - name: net_revenue
+          alias: rev
+
+  # ---- Cumulative ----
+  - name: revenue_ytd
+    type: cumulative
+    label: "Revenue YTD"
+    type_params:
+      measure: net_revenue_amount
+      window: 1 year
+      grain_to_date: year
+
+  - name: revenue_qtd
+    type: cumulative
+    label: "Revenue QTD"
+    type_params:
+      measure: net_revenue_amount
+      window: 1 quarter
+      grain_to_date: quarter
+
+
+# ============================================================================
+# SAVED QUERIES
+# ============================================================================
+# CRITICAL FOR POWER BI: Each saved query appears as a named table
+# in the Power BI Navigator pane. Design these around your report needs.
+#
+# In Power BI Navigator you'll see:
+#   - ALL                          (every metric + dimension)
+#   - monthly_pnl                  (P&L dashboard)
+#   - revenue_analysis             (Revenue breakdown)
+#   - budget_variance_report       (Actual vs Budget)
+#   - balance_sheet_metrics        (BS and liquidity)
+# ============================================================================
+
+saved_queries:
+
+  - name: monthly_pnl
+    description: >
+      Monthly P&L for the executive income statement dashboard.
+      Select this in Power BI for the CFO board deck.
+    query_params:
+      metrics:
+        - net_revenue
+        - cogs
+        - gross_profit
+        - gross_margin_pct
+        - operating_expenses
+        - operating_income
+        - depreciation_amortization
+        - ebitda
+        - net_income
+      group_by:
+        - TimeDimension('invoice_date', 'month')
+        - Dimension('fiscal_year')
+        - Dimension('fiscal_quarter')
+        - Dimension('fiscal_period_name')
+    exports:
+      - name: pnl_export
+        config:
+          export_as: table
+          schema: reporting_exports
+          alias: monthly_pnl
+
+  - name: revenue_analysis
+    description: >
+      Revenue breakdown by type, customer, and entity.
+      Select this in Power BI for the revenue mix dashboard.
+    query_params:
+      metrics:
+        - gross_revenue
+        - net_revenue
+        - total_discounts
+        - total_returns
+        - invoice_count
+        - active_customers
+      group_by:
+        - TimeDimension('invoice_date', 'month')
+        - Dimension('fiscal_year')
+        - Dimension('fiscal_quarter')
+        - Dimension('fiscal_period_name')
+        - Dimension('revenue_type')
+        - Dimension('customer_name')
+        - Dimension('entity_name')
+
+  - name: budget_variance_report
+    description: >
+      Actual vs budget by department and account category.
+      Select this in Power BI for the monthly business review.
+    query_params:
+      metrics:
+        - actual_gl
+        - budget_total
+        - forecast_total
+        - budget_variance
+        - budget_variance_pct
+      group_by:
+        - TimeDimension('budget_date', 'month')
+        - Dimension('fiscal_year')
+        - Dimension('fiscal_period_name')
+        - Dimension('cost_center_name')
+        - Dimension('division')
+        - Dimension('account_category')
+
+  - name: balance_sheet_metrics
+    description: >
+      Balance sheet and liquidity KPIs.
+      Select this in Power BI for the treasury dashboard.
+    query_params:
+      metrics:
+        - current_assets
+        - current_liabilities
+        - working_capital
+        - accounts_receivable
+        - dso
+      group_by:
+        - TimeDimension('posting_date', 'month')
+        - Dimension('fiscal_year')
+        - Dimension('entity_name')
+
+  - name: gl_detail
+    description: >
+      GL-level detail for drill-through from any dashboard.
+      Select this in Power BI for the finance team's detail view.
+    query_params:
+      metrics:
+        - actual_gl
+        - depreciation_amortization
+        - entry_count
+      group_by:
+        - TimeDimension('posting_date', 'month')
+        - Dimension('fiscal_year')
+        - Dimension('fiscal_quarter')
+        - Dimension('fiscal_period_name')
+        - Dimension('account_category')
+        - Dimension('account_name')
+        - Dimension('cost_center_name')
+        - Dimension('division')
+        - Dimension('entity_name')
+        - Dimension('journal_type')
+
+  - name: entry_count
+    description: "Journal entry count metric"
+    query_params:
+      metrics:
+        - entry_count
+      group_by:
+        - TimeDimension('posting_date', 'month')
