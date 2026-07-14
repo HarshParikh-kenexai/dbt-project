@@ -447,6 +447,10 @@ metrics:
 
 saved_queries:
 
+  # ============================================================
+  # CROSS-MODEL (metric_time only)
+  # ============================================================
+
   - name: monthly_pnl
     description: "Monthly P&L for exec dashboard"
     query_params:
@@ -508,6 +512,10 @@ saved_queries:
           schema: reporting_exports
           alias: balance_sheet
 
+  # ============================================================
+  # INVOICE MODEL (revenue queries)
+  # ============================================================
+
   - name: revenue_analysis
     description: "Revenue by type and customer"
     query_params:
@@ -549,6 +557,31 @@ saved_queries:
           schema: reporting_exports
           alias: revenue_by_quarter
 
+  - name: revenue_by_entity
+    description: "Revenue by legal entity and currency"
+    query_params:
+      metrics:
+        - net_revenue
+        - gross_revenue
+        - total_discounts
+        - invoice_count
+      group_by:
+        - TimeDimension('metric_time', 'month')
+        - Dimension('invoice__entity_name')
+        - Dimension('invoice__fiscal_year')
+        - Dimension('invoice__fiscal_quarter')
+        - Dimension('invoice__currency_code')
+    exports:
+      - name: revenue_entity_export
+        config:
+          export_as: table
+          schema: reporting_exports
+          alias: revenue_by_entity
+
+  # ============================================================
+  # JOURNAL ENTRIES MODEL (GL queries)
+  # ============================================================
+
   - name: gl_by_department
     description: "GL actuals by department and account"
     query_params:
@@ -569,8 +602,54 @@ saved_queries:
           schema: reporting_exports
           alias: gl_by_department
 
+  - name: gl_by_entity
+    description: "GL actuals by legal entity"
+    query_params:
+      metrics:
+        - actual_gl
+        - cogs
+        - operating_expenses
+        - depreciation_amortization
+        - net_income
+        - entry_count
+      group_by:
+        - TimeDimension('metric_time', 'month')
+        - Dimension('journal_entry__entity_name')
+        - Dimension('journal_entry__entity_country')
+        - Dimension('journal_entry__fiscal_year')
+        - Dimension('journal_entry__fiscal_quarter')
+        - Dimension('journal_entry__fiscal_period_name')
+        - Dimension('journal_entry__account_category')
+    exports:
+      - name: gl_entity_export
+        config:
+          export_as: table
+          schema: reporting_exports
+          alias: gl_by_entity
+
+  - name: gl_by_account
+    description: "GL actuals by account for P&L drill-through"
+    query_params:
+      metrics:
+        - actual_gl
+        - entry_count
+      group_by:
+        - TimeDimension('metric_time', 'month')
+        - Dimension('journal_entry__account_category')
+        - Dimension('journal_entry__account_name')
+        - Dimension('journal_entry__account_number')
+        - Dimension('journal_entry__financial_statement_line')
+        - Dimension('journal_entry__fiscal_year')
+        - Dimension('journal_entry__fiscal_period_name')
+    exports:
+      - name: gl_account_export
+        config:
+          export_as: table
+          schema: reporting_exports
+          alias: gl_by_account
+
   - name: gl_detail
-    description: "GL detail for drill-through"
+    description: "Full GL detail for drill-through"
     query_params:
       metrics:
         - actual_gl
@@ -583,8 +662,12 @@ saved_queries:
         - Dimension('journal_entry__account_category')
         - Dimension('journal_entry__account_name')
         - Dimension('journal_entry__cost_center_name')
+        - Dimension('journal_entry__division')
+        - Dimension('journal_entry__business_unit')
         - Dimension('journal_entry__entity_name')
+        - Dimension('journal_entry__entity_country')
         - Dimension('journal_entry__journal_type')
+        - Dimension('journal_entry__source_system')
     exports:
       - name: gl_detail_export
         config:
@@ -592,8 +675,53 @@ saved_queries:
           schema: reporting_exports
           alias: gl_detail
 
+  - name: opex_detail
+    description: "Operating expenses by department and account"
+    query_params:
+      metrics:
+        - operating_expenses
+        - depreciation_amortization
+      group_by:
+        - TimeDimension('metric_time', 'month')
+        - Dimension('journal_entry__cost_center_name')
+        - Dimension('journal_entry__department')
+        - Dimension('journal_entry__division')
+        - Dimension('journal_entry__account_name')
+        - Dimension('journal_entry__fiscal_year')
+        - Dimension('journal_entry__fiscal_period_name')
+    exports:
+      - name: opex_detail_export
+        config:
+          export_as: table
+          schema: reporting_exports
+          alias: opex_detail
+
+  - name: balance_sheet_by_entity
+    description: "Balance sheet by legal entity"
+    query_params:
+      metrics:
+        - current_assets
+        - current_liabilities
+        - working_capital
+        - accounts_receivable
+      group_by:
+        - TimeDimension('metric_time', 'month')
+        - Dimension('journal_entry__entity_name')
+        - Dimension('journal_entry__entity_country')
+        - Dimension('journal_entry__fiscal_year')
+    exports:
+      - name: bs_entity_export
+        config:
+          export_as: table
+          schema: reporting_exports
+          alias: balance_sheet_by_entity
+
+  # ============================================================
+  # BUDGET MODEL
+  # ============================================================
+
   - name: budget_variance_report
-    description: "Actual vs budget by department"
+    description: "Budget vs forecast by department"
     query_params:
       metrics:
         - budget_total
@@ -609,3 +737,25 @@ saved_queries:
           export_as: table
           schema: reporting_exports
           alias: budget_variance
+
+  - name: budget_by_account
+    description: "Budget by account and period"
+    query_params:
+      metrics:
+        - budget_total
+        - forecast_total
+      group_by:
+        - TimeDimension('metric_time', 'month')
+        - Dimension('budget_line__account_category')
+        - Dimension('budget_line__account_name')
+        - Dimension('budget_line__cost_center_name')
+        - Dimension('budget_line__fiscal_year')
+        - Dimension('budget_line__fiscal_quarter')
+        - Dimension('budget_line__fiscal_period_name')
+        - Dimension('budget_line__budget_version')
+    exports:
+      - name: budget_account_export
+        config:
+          export_as: table
+          schema: reporting_exports
+          alias: budget_by_account
