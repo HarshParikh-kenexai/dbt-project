@@ -5,10 +5,6 @@ sources:
     description: "ERP system extracts (SAP/Oracle)"
     database: FINANCE_DB
     schema: raw
-    freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
-    loaded_at_field: created_at
     tables:
       - name: raw_gl_journal_entries
         description: "GL journal entries — daily extract"

@@ -1,57 +1,249 @@
 version: 2
 
 models:
+
   - name: fct_journal_entries
     description: "GL journal entries at transaction grain"
+    config:
+      materialized: incremental
+      incremental_strategy: merge
+      unique_key: journal_entry_id
+      cluster_by: ['posting_date']
+      on_schema_change: append_new_columns
+      snowflake_warehouse: FINANCE_WH
+      transient: false
+      tags: ['finance', 'fact', 'daily']
     columns:
       - name: journal_entry_id
-        tests: [unique, not_null]
+        description: "Surrogate key for the journal entry line"
+        tests:
+          - unique
+          - not_null
       - name: posting_date
-        tests: [not_null]
+        description: "GL posting date (YYYY-MM-DD)"
+        tests:
+          - not_null
       - name: account_id
-        tests: [not_null, {relationships: {to: ref('dim_chart_of_accounts'), field: account_id}}]
+        description: "FK to dim_chart_of_accounts"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_chart_of_accounts')
+                field: account_id
+      - name: cost_center_id
+        description: "FK to dim_cost_center"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_cost_center')
+                field: cost_center_id
+      - name: entity_id
+        description: "FK to dim_legal_entity"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_legal_entity')
+                field: entity_id
+      - name: date_key
+        description: "FK to dim_fiscal_calendar (integer YYYYMMDD)"
+      - name: debit_amount
+        description: "Debit amount in functional currency"
+      - name: credit_amount
+        description: "Credit amount in functional currency"
+      - name: net_amount
+        description: "Net amount = debit - credit in functional currency"
+      - name: reporting_amount
+        description: "Net amount converted to reporting currency (USD)"
+      - name: source_system
+        description: "Originating system: SAP, Oracle, Manual, etc."
+      - name: journal_type
+        description: "Standard, Adjusting, Reversing, Statistical"
 
   - name: fct_invoices
     description: "Customer invoices — revenue recognition source"
+    config:
+      materialized: incremental
+      incremental_strategy: merge
+      unique_key: invoice_id
+      cluster_by: ['invoice_date']
+      snowflake_warehouse: FINANCE_WH
+      transient: false
+      tags: ['finance', 'fact', 'daily']
     columns:
       - name: invoice_id
-        tests: [unique, not_null]
+        description: "Unique invoice identifier"
+        tests:
+          - unique
+          - not_null
       - name: invoice_date
-        tests: [not_null]
+        description: "Invoice issue date"
+        tests:
+          - not_null
+      - name: date_key
+        description: "FK to dim_fiscal_calendar"
+      - name: entity_id
+        description: "FK to dim_legal_entity"
+      - name: customer_id
+        description: "Customer identifier from billing/CRM"
+      - name: customer_name
+        description: "Customer display name"
+      - name: revenue_type
+        description: "Revenue classification: Product, Service, Subscription, License"
+      - name: invoice_amount
+        description: "Gross invoice amount before discounts/returns"
+      - name: discount_amount
+        description: "Trade and volume discounts"
+      - name: return_amount
+        description: "Product returns and credit notes"
+      - name: net_amount_usd
+        description: "Net invoice amount in reporting currency (USD)"
+      - name: currency_code
+        description: "Transaction currency ISO code"
 
   - name: fct_budget
     description: "Budget and rolling forecast"
+    config:
+      materialized: table
+      snowflake_warehouse: FINANCE_WH
+      tags: ['finance', 'fact', 'weekly']
     columns:
       - name: budget_line_id
-        tests: [unique, not_null]
+        description: "Surrogate key for the budget line"
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        description: "FK to dim_chart_of_accounts"
+      - name: cost_center_id
+        description: "FK to dim_cost_center"
+      - name: date_key
+        description: "FK to dim_fiscal_calendar"
+      - name: budget_version
+        description: "Version: Original, Reforecast_Q1, Reforecast_Q2, etc."
+      - name: budget_amount
+        description: "Approved budget amount for this period"
+      - name: forecast_amount
+        description: "Latest rolling forecast amount"
 
   - name: dim_chart_of_accounts
     description: "GL account hierarchy"
+    config:
+      materialized: table
+      snowflake_warehouse: FINANCE_WH
+      tags: ['finance', 'dimension']
     columns:
       - name: account_id
-        tests: [unique, not_null]
-
-  - name: dim_cost_center
-    description: "Cost center / department hierarchy"
-    columns:
-      - name: cost_center_id
-        tests: [unique, not_null]
-
-  - name: dim_legal_entity
-    description: "Legal entities for consolidation"
-    columns:
-      - name: entity_id
-        tests: [unique, not_null]
+        tests:
+          - unique
+          - not_null
+      - name: account_number
+        description: "GL account number (e.g., 4000, 5100)"
+      - name: account_name
+        description: "Descriptive name (e.g., Product Revenue, COGS)"
+      - name: account_category
+        description: "Revenue, COGS, Operating Expense, Other, Tax"
+      - name: account_sub_category
+        description: "Sub-classification within category"
+      - name: financial_statement
+        description: "Income Statement, Balance Sheet, or Cash Flow"
+      - name: is_revenue_account
+        description: "TRUE for accounts 4000-4999"
+      - name: is_expense_account
+        description: "TRUE for accounts 6000-8999"
+      - name: normal_balance
+        description: "Debit or Credit"
 
   - name: dim_fiscal_calendar
     description: "Fiscal calendar with custom April FY start"
+    config:
+      materialized: table
+      snowflake_warehouse: FINANCE_WH
+      tags: ['finance', 'dimension']
     columns:
       - name: date_key
-        tests: [unique, not_null]
+        description: "Integer key YYYYMMDD"
+        tests:
+          - unique
+          - not_null
+      - name: calendar_date
+        description: "Standard date"
+      - name: fiscal_year
+        description: "e.g., FY2026"
+      - name: fiscal_quarter
+        description: "Q1-Q4"
+      - name: fiscal_period
+        description: "Fiscal month number 1-12"
+      - name: fiscal_period_name
+        description: "e.g., Apr 2025"
+      - name: calendar_year
+        description: "Calendar year integer"
+      - name: calendar_month
+        description: "Calendar month integer"
+      - name: calendar_quarter
+        description: "Calendar quarter string"
+      - name: is_current_period
+        description: "Boolean: is current fiscal period"
+      - name: is_ytd
+        description: "Boolean: is within YTD range"
+
+  - name: dim_cost_center
+    description: "Cost center / department hierarchy"
+    config:
+      materialized: table
+      snowflake_warehouse: FINANCE_WH
+      tags: ['finance', 'dimension']
+    columns:
+      - name: cost_center_id
+        tests:
+          - unique
+          - not_null
+      - name: cost_center_code
+        description: "Cost center code"
+      - name: cost_center_name
+        description: "Cost center display name"
+      - name: department
+        description: "Department name"
+      - name: division
+        description: "Division rollup"
+      - name: business_unit
+        description: "Top-level business unit"
+      - name: cost_center_owner
+        description: "Owner / responsible VP"
+
+  - name: dim_legal_entity
+    description: "Legal entities for consolidation"
+    config:
+      materialized: table
+      snowflake_warehouse: FINANCE_WH
+      tags: ['finance', 'dimension']
+    columns:
+      - name: entity_id
+        tests:
+          - unique
+          - not_null
+      - name: entity_code
+        description: "Company code"
+      - name: entity_name
+        description: "Legal entity name"
+      - name: entity_country
+        description: "Country of incorporation"
+      - name: entity_currency
+        description: "Functional currency ISO code"
+      - name: is_intercompany
+        description: "Boolean: intercompany entity flag"
+      - name: consolidation_group
+        description: "Consolidation group identifier"
 
   - name: metricflow_time_spine
-    description: "Contiguous date spine for MetricFlow cumulative metrics"
+    description: "Contiguous daily date spine for MetricFlow cumulative metrics"
+    config:
+      materialized: table
+      snowflake_warehouse: FINANCE_WH
+      tags: ['finance', 'metricflow']
     time_spine:
-      standard_granularity_column:
-        column: ds
-        grain: day
+      standard_granularity_column: ds
+    columns:
+      - name: ds
+        description: "Daily date column"
+        granularity: day
