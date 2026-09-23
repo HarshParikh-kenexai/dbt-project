@@ -1,26 +1,26 @@
 # ============================================================================
-# profiles.yml (example — do NOT commit to git, keep in ~/.dbt/)
+# profiles.yml — Snowsight Workspace (env_var backed by env.yml)
 # ============================================================================
+# role and warehouse must be literal values or context functions in Workspaces.
+# account and user are handled by the Snowflake session.
 snowflake_finance:
   target: dev
   outputs:
     dev:
       type: snowflake
-      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
-      user: "{{ env_var('SNOWFLAKE_USER') }}"
-      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      account: ""
+      user: ""
       role: FINANCE_ROLE
       warehouse: FINANCE_WH
-      database: FINANCE_DB
-      schema: finance_mart
+      database: "{{ env_var('DBT_DATABASE') }}"
+      schema: "{{ env_var('DBT_SCHEMA') }}"
       threads: 4
     prod:
       type: snowflake
-      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
-      user: SVC_DBT_FINANCE
-      password: "{{ env_var('DBT_PROD_PASSWORD') }}"
+      account: ""
+      user: ""
       role: FINANCE_ROLE
       warehouse: FINANCE_WH
-      database: FINANCE_DB
-      schema: finance_mart
+      database: "{{ env_var('DBT_DATABASE') }}"
+      schema: "{{ env_var('DBT_SCHEMA') }}"
       threads: 8

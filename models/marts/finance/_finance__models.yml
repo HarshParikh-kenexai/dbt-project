@@ -28,23 +28,20 @@ models:
         tests:
           - not_null
           - relationships:
-              arguments:
-                to: ref('dim_chart_of_accounts')
-                field: account_id
+              to: ref('dim_chart_of_accounts')
+              field: account_id
       - name: cost_center_id
         description: "FK to dim_cost_center"
         tests:
           - relationships:
-              arguments:
-                to: ref('dim_cost_center')
-                field: cost_center_id
+              to: ref('dim_cost_center')
+              field: cost_center_id
       - name: entity_id
         description: "FK to dim_legal_entity"
         tests:
           - relationships:
-              arguments:
-                to: ref('dim_legal_entity')
-                field: entity_id
+              to: ref('dim_legal_entity')
+              field: entity_id
       - name: date_key
         description: "FK to dim_fiscal_calendar (integer YYYYMMDD)"
       - name: debit_amount
